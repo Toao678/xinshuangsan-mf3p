@@ -1,0 +1,1673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PC28 实时双轨预测系统 v13</title>
+<style>
+/* ============================================================
+   全局样式（明亮紧凑）
+   ============================================================ */
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",
+              "Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background:#eef4fb;color:#1e293b;font-size:13px;line-height:1.45;
+  padding:10px;min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+.container{max-width:1020px;margin:0 auto;}
+
+/* ---------- 顶部状态栏 ---------- */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
+  gap:8px;padding:10px 14px;background:#fff;
+  border-radius:10px;margin-bottom:10px;border:1px solid #dbe4ee;
+  box-shadow:0 1px 3px rgba(15,23,42,.05);
+}
+.topbar .title{font-size:15px;font-weight:700;color:#1e3a8a;}
+.topbar .title small{font-size:11px;color:#64748b;font-weight:400;margin-left:6px;}
+.topbar .meta{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#64748b;align-items:center;}
+.topbar .meta b{color:#2563eb;font-family:ui-monospace,monospace;font-weight:700;}
+.topbar .meta .cd{color:#d97706;font-weight:700;font-family:ui-monospace,monospace;}
+.status-dot{
+  display:inline-block;width:7px;height:7px;border-radius:50%;
+  background:#22c55e;margin-right:4px;animation:pulse 1.6s infinite;vertical-align:middle;
+}
+.status-dot.err{background:#ef4444;animation:none;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+
+/* ---------- 卡片 ---------- */
+.card{
+  background:#fff;border-radius:10px;padding:14px 16px;margin-bottom:10px;
+  border:1px solid #dbe4ee;box-shadow:0 1px 3px rgba(15,23,42,.05);
+}
+.card h2{
+  font-size:13px;font-weight:700;color:#1e293b;margin-bottom:10px;
+  padding-left:8px;border-left:3px solid #2563eb;line-height:1.3;
+}
+.card h2 .sub{font-size:11px;color:#94a3b8;font-weight:400;margin-left:6px;}
+
+/* ---------- 表格 ---------- */
+.table-wrap{overflow:auto;border:1px solid #dbe4ee;border-radius:8px;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th,td{
+  padding:6px 7px;text-align:center;border-bottom:1px solid #eef2f7;
+  white-space:nowrap;vertical-align:middle;
+}
+th{
+  background:#f8fafc;color:#475569;font-weight:600;font-size:11px;
+  position:sticky;top:0;z-index:2;border-bottom:1.5px solid #dbe4ee;
+}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover{background:#f8fbff;}
+tbody tr.miss td{background:#fef2f2;}
+tbody tr.miss:hover td{background:#fee2e2;}
+tbody tr.missB td{background:#eff6ff;}
+tbody tr.missB:hover td{background:#dbeafe;}
+tbody tr.pending td{background:#fffbeb;}
+tbody tr.clickable{cursor:pointer;}
+tbody tr.clickable:hover{background:#eff6ff;}
+
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600;}
+.num{font-weight:800;color:#d97706;font-family:ui-monospace,monospace;}
+
+/* ---------- 组合标签 ---------- */
+.tag{
+  display:inline-block;padding:1px 8px;border-radius:20px;
+  font-size:11.5px;font-weight:600;color:#fff;margin:0 1px;line-height:1.5;
+}
+.tag.g0{background:#ef4444;}
+.tag.g1{background:#3b82f6;}
+.tag.g2{background:#f59e0b;}
+.tag.g3{background:#10b981;}
+
+/* ---------- 预测卡片 ---------- */
+.predict-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media(max-width:600px){.predict-grid{grid-template-columns:1fr;}}
+.predict-box{
+  border-radius:10px;padding:12px 14px;border:1px solid #dbe4ee;background:#f8fafc;
+}
+.predict-box.planA{border-color:#fecaca;background:#fff5f5;}
+.predict-box.planB{border-color:#bfdbfe;background:#f0f7ff;}
+.plan-title{
+  font-size:12px;font-weight:700;margin-bottom:10px;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.planA .plan-title{color:#dc2626;}
+.planB .plan-title{color:#1d4ed8;}
+.plan-title .tag-mini{font-size:10px;padding:1px 7px;border-radius:10px;font-weight:600;}
+.planA .tag-mini{background:#fee2e2;color:#b91c1c;}
+.planB .tag-mini{background:#dbeafe;color:#1d4ed8;}
+.predict-line{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+.predict-line:last-child{margin-bottom:0;}
+.predict-line .label{font-size:11px;color:#94a3b8;flex-shrink:0;width:36px;text-align:right;}
+.kill{font-size:20px;font-weight:800;color:#dc2626;letter-spacing:1.5px;}
+.kill.small{font-size:15px;}
+.buy{display:flex;gap:4px;flex-wrap:wrap;}
+.buy span{
+  font-size:12px;font-weight:700;color:#15803d;background:#dcfce7;
+  padding:2px 10px;border-radius:6px;border:1px solid #86efac;
+}
+.confidence{
+  margin-top:12px;padding-top:10px;border-top:1px dashed #dbe4ee;
+  display:flex;align-items:center;gap:10px;font-size:11.5px;
+}
+.confidence .label{color:#94a3b8;flex-shrink:0;}
+.conf-bar{flex:1;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;max-width:280px;}
+.conf-bar>i{
+  display:block;height:100%;background:linear-gradient(90deg,#f59e0b,#22c55e);
+  transition:width .4s;
+}
+.conf-val{font-family:ui-monospace,monospace;font-weight:800;font-size:13px;color:#d97706;}
+
+/* ---------- 模式切换 ---------- */
+.mode-switch{
+  display:inline-flex;background:#f1f5f9;border-radius:8px;padding:3px;gap:0;
+  margin-bottom:10px;
+}
+.mode-switch button{
+  padding:5px 14px;border:none;background:transparent;cursor:pointer;
+  font-size:12px;font-weight:600;color:#64748b;border-radius:6px;
+  transition:.15s;font-family:inherit;
+}
+.mode-switch button.active{background:#2563eb;color:#fff;}
+
+/* ---------- 图表 ---------- */
+.chart-wrap{border:1px solid #dbe4ee;border-radius:10px;padding:6px;background:#fbfdff;}
+canvas{display:block;width:100%;}
+
+/* ---------- 频率条 ---------- */
+.freq-list{display:flex;flex-direction:column;gap:8px;}
+.freq-item{display:flex;align-items:center;gap:10px;font-size:12px;}
+.freq-item .name{width:50px;text-align:right;font-weight:700;flex-shrink:0;}
+.freq-item .bar{flex:1;height:20px;background:#f1f5f9;border-radius:5px;overflow:hidden;border:1px solid #e2e8f0;}
+.freq-item .bar>i{display:block;height:100%;border-radius:5px;transition:width .4s;}
+.freq-item .pct{width:110px;font-family:ui-monospace,monospace;font-weight:700;font-size:11.5px;color:#475569;text-align:right;flex-shrink:0;}
+
+/* ---------- 结果对错 ---------- */
+.result-ok{color:#16a34a;font-weight:800;font-size:12px;}
+.result-fail{color:#dc2626;font-weight:800;font-size:12px;}
+.result-pending{color:#d97706;font-weight:700;font-size:11.5px;}
+
+/* ---------- 弹窗 ---------- */
+.modal-mask{
+  position:fixed;inset:0;background:rgba(15,23,42,.4);display:none;
+  align-items:center;justify-content:center;z-index:100;padding:20px;
+}
+.modal-mask.show{display:flex;}
+.modal{
+  background:#fff;border-radius:12px;max-width:820px;width:100%;
+  max-height:86vh;overflow:auto;padding:16px 18px;
+  box-shadow:0 20px 60px rgba(15,23,42,.3);
+}
+.modal h3{font-size:14px;font-weight:700;margin-bottom:12px;color:#1e293b;}
+.modal h4{font-size:12.5px;font-weight:700;margin:14px 0 8px;color:#475569;}
+.modal .close{
+  float:right;cursor:pointer;font-size:18px;color:#94a3b8;
+  border:none;background:none;padding:0 6px;
+}
+.modal .close:hover{color:#dc2626;}
+.modal table{font-size:11px;}
+.modal td{padding:4px 6px;}
+
+/* ---------- 清除按钮 ---------- */
+.clear-section{text-align:center;padding:16px 0 30px;}
+.clear-btn{
+  background:none;border:none;color:#94a3b8;font-size:11.5px;
+  cursor:pointer;text-decoration:underline;font-family:inherit;
+  padding:6px 12px;border-radius:6px;transition:.2s;
+}
+.clear-btn:hover{color:#dc2626;background:rgba(220,38,38,.06);}
+
+/* ---------- 错误提示 ---------- */
+.err-tip{
+  display:flex;align-items:center;gap:6px;padding:8px 12px;
+  background:#fef2f2;border:1px solid #fecaca;border-radius:8px;
+  color:#b91c1c;font-size:12px;margin-bottom:10px;
+}
+.err-tip.hidden{display:none;}
+
+::-webkit-scrollbar{width:7px;height:7px;}
+::-webkit-scrollbar-track{background:#f1f5f9;}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px;}
+::-webkit-scrollbar-thumb:hover{background:#94a3b8;}
+
+@media(max-width:640px){
+  body{font-size:12px;padding:8px;}
+  .topbar .title{font-size:13px;}
+  .card{padding:11px 12px;}
+  .kill{font-size:17px;}
+  .kill.small{font-size:13px;}
+  th,td{padding:5px 5px;font-size:11px;}
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="topbar">
+    <div class="title">PC28 实时双轨预测系统 <small>v13.1</small></div>
+    <div class="meta">
+      <span><span class="status-dot" id="statusDot"></span>本地记忆：<b id="memCount">—</b> 期</span>
+      <span>时间：<b id="clock">—</b></span>
+      <span>倒计时：<span class="cd" id="countdown">—</span></span>
+    </div>
+  </div>
+
+  <div class="err-tip hidden" id="errTip">
+    ⚠️ <span id="errMsg">接口异常，使用本地数据</span>
+  </div>
+
+  <div class="card">
+    <h2>最新 10 期开奖记录</h2>
+    <div class="table-wrap" style="max-height:340px;">
+      <table>
+        <thead>
+          <tr><th>期号</th><th>号码</th><th>和值</th><th>组合</th><th>时间</th></tr>
+        </thead>
+        <tbody id="latestBody">
+          <tr><td colspan="5" style="color:#94a3b8;padding:14px;">加载中…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>下一期预测 <span class="sub" id="predictPeriod">目标期号：—</span></h2>
+
+    <div class="mode-switch">
+      <button id="modePair" class="active">双组模式：配对联合</button>
+      <button id="modeTop2">双组模式：单组前二</button>
+    </div>
+
+    <div class="predict-grid">
+      <div class="predict-box planA">
+        <div class="plan-title">
+          <span>方案A · 买三杀一</span>
+          <span class="tag-mini">30基学习器集成</span>
+        </div>
+        <div class="predict-line">
+          <span class="label">杀</span>
+          <span class="kill" id="planAKill">—</span>
+        </div>
+        <div class="predict-line">
+          <span class="label">买入</span>
+          <div class="buy" id="planABuy"><span>—</span></div>
+        </div>
+        <div class="confidence">
+          <span class="label">置信A</span>
+          <div class="conf-bar"><i id="confBarA" style="width:0%"></i></div>
+          <span class="conf-val" id="confValA">—</span>
+        </div>
+      </div>
+
+      <div class="predict-box planB">
+        <div class="plan-title">
+          <span>方案B · 买二杀二</span>
+          <span class="tag-mini">配对联合</span>
+        </div>
+        <div class="predict-line">
+          <span class="label">杀</span>
+          <span class="kill small" id="planBKill">—</span>
+        </div>
+        <div class="predict-line">
+          <span class="label">买入</span>
+          <div class="buy" id="planBBuy"><span>—</span></div>
+        </div>
+        <div class="confidence">
+          <span class="label">置信B</span>
+          <div class="conf-bar"><i id="confBarB" style="width:0%"></i></div>
+          <span class="conf-val" id="confValB">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>30 期滑动窗口命中率 <span class="sub">方案A 红 · 方案B 蓝 · 85% 参考线</span></h2>
+    <div class="chart-wrap"><canvas id="chartHit"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h2>最近 50 期明细 <span class="sub">点击任一行查看基学习器快照</span></h2>
+    <div class="table-wrap" style="max-height:440px;">
+      <table>
+        <thead>
+          <tr>
+            <th>期号</th>
+            <th>实际组合</th>
+            <th>预测杀1</th>
+            <th>A命中</th>
+            <th>预测双杀对</th>
+            <th>B命中</th>
+          </tr>
+        </thead>
+        <tbody id="detailBody">
+          <tr><td colspan="6" style="color:#94a3b8;padding:14px;">加载中…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>各组合出现频率统计</h2>
+    <div class="freq-list" id="freqList">
+      <div style="color:#94a3b8;padding:8px;">加载中…</div>
+    </div>
+  </div>
+
+  <div class="clear-section">
+    <button class="clear-btn" id="clearBtn">清除本地数据并重新开始</button>
+  </div>
+</div>
+
+<!-- 快照弹窗 -->
+<div class="modal-mask" id="modalMask">
+  <div class="modal" id="modalBox">
+    <button class="close" id="modalClose">×</button>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<script>
+/* ==================================================================================
+   PC28 实时双轨预测系统 v13.1
+   ----------------------------------------------------------------------------------
+   严格时间一致性：
+     · 预测第 t 期时，所有特征只用 [0, t-1] 的数据
+     · 禁止用第 t 期数据参与第 t 期特征
+     · walk-forward：t = minT..end，每期预测后不回改
+     · 预测快照写入 IndexedDB，开奖后只回写 actualCombination / hitA / hitB
+   ================================================================================== */
+
+/* ============================ A. 基础常量与工具 ============================ */
+
+const GROUP_NAMES = ['小单', '小双', '大单', '大双'];
+const GROUP_IDX   = { '小单': 0, '小双': 1, '大单': 2, '大双': 3 };
+const GROUP_COLORS = ['#ef4444', '#3b82f6', '#f59e0b', '#10b981'];
+
+/** 6 个双杀对（组合的两人组合） */
+const PAIRS = [[0,1],[0,2],[0,3],[1,2],[1,3],[2,3]];
+const PAIR_LABELS = PAIRS.map(p => GROUP_NAMES[p[0]] + GROUP_NAMES[p[1]]);
+
+/** 和值计数（3 个 0~9 数字之和为 s 的方案数，总和 1000） */
+const SUM_COUNTS = [
+  1,3,6,10,15,21,28,36,45,55,63,69,73,75,
+  75,73,69,63,55,45,36,28,21,15,10,6,3,1
+];
+
+/** 和值 → 组合索引 */
+function groupOf(sum){
+  if (sum < 0 || sum > 27) return -1;
+  const isBig = sum >= 14;
+  const isOdd = (sum % 2) === 1;
+  if (!isBig &&  isOdd) return 0;
+  if (!isBig && !isOdd) return 1;
+  if ( isBig &&  isOdd) return 2;
+  return 3;
+}
+
+/** 四个组合的理论概率 */
+const THEORY_PROB = (function(){
+  const c = [0,0,0,0];
+  for (let s = 0; s <= 27; s++) c[groupOf(s)] += SUM_COUNTS[s];
+  return c.map(v => v / 1000);
+})();
+
+/** 7 个和值区间 */
+const SUM_BINS = [[0,3],[4,7],[8,11],[12,15],[16,19],[20,23],[24,27]];
+const BIN_COVER = [
+  [2,2,2,1,0,0,0],
+  [2,2,2,1,0,0,0],
+  [0,0,0,1,2,2,2],
+  [0,0,0,1,2,2,2]
+];
+
+/** 系统常量 */
+const MIN_T            = 80;     // 最小预热期数
+const N_LEARNERS       = 30;     // 基学习器数量
+const EMA_WINDOW       = 30;     // 权重窗口
+const MAX_RECORDS      = 10000;  // 本地最大记录数
+const POLL_MS          = 30000;  // 轮询间隔
+const MODEL_VERSION    = 'v13.1';
+
+/** DOM */
+const $ = id => document.getElementById(id);
+
+/** HTML 转义 */
+function esc(s){
+  return String(s).replace(/[&<>"']/g, ch =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+}
+function pct(v, d){ return (v * 100).toFixed(d === undefined ? 2 : d) + '%'; }
+
+/** 可复现伪随机 */
+function makeRNG(seed){
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    return s / 0x7fffffff;
+  };
+}
+
+/** 置信度：1 - 归一化熵 */
+function computeConf(scores){
+  const arr = Array.isArray(scores) ? scores : [];
+  if (arr.length === 0) return 0;
+  const minS = Math.min(...arr);
+  const shifted = arr.map(s => s - minS + 0.001);
+  const sum = shifted.reduce((a,b) => a + b, 0);
+  if (sum === 0) return 0;
+  let ent = 0;
+  for (const s of shifted){
+    const p = s / sum;
+    if (p > 0) ent -= p * Math.log(p);
+  }
+  const maxEnt = Math.log(arr.length);
+  return Math.max(0, Math.min(1, 1 - ent / maxEnt));
+}
+
+/** 数据窗口指纹 */
+function windowHash(records, cutoff){
+  if (cutoff <= 0) return 'empty';
+  let h = cutoff;
+  const start = Math.max(0, cutoff - 10);
+  for (let i = start; i < cutoff; i++){
+    h = (h * 31 + Number(records[i].nbr)) | 0;
+  }
+  return 'w' + cutoff + '_h' + h;
+}
+
+/* ============================ B. IndexedDB 记忆库模块 ============================ */
+
+const DB_NAME    = 'PC28PredictorDB';
+const DB_VERSION = 3;
+const STORE_HISTORY     = 'history';
+const STORE_PREDICTIONS = 'predictions';
+const STORE_META        = 'meta';
+
+let _db = null;
+
+function openDB(){
+  return new Promise((resolve, reject) => {
+    if (_db){ resolve(_db); return; }
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_HISTORY)){
+        const s = db.createObjectStore(STORE_HISTORY, { keyPath: 'nbr' });
+        s.createIndex('nbr_idx', 'nbr', { unique: true });
+      }
+      if (!db.objectStoreNames.contains(STORE_PREDICTIONS)){
+        db.createObjectStore(STORE_PREDICTIONS, { keyPath: 'nbr' });
+      }
+      if (!db.objectStoreNames.contains(STORE_META)){
+        db.createObjectStore(STORE_META, { keyPath: 'key' });
+      }
+    };
+    req.onsuccess = (e) => { _db = e.target.result; resolve(_db); };
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+/** 读取全部历史（升序） */
+function getAllHistory(){
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_HISTORY, 'readonly');
+    const req = tx.objectStore(STORE_HISTORY).getAll();
+    req.onsuccess = () => {
+      const arr = req.result || [];
+      arr.sort((a, b) => {
+        const na = Number(a.nbr), nb = Number(b.nbr);
+        if (!isNaN(na) && !isNaN(nb)) return na - nb;
+        return String(a.nbr).localeCompare(String(b.nbr));
+      });
+      resolve(arr);
+    };
+    req.onerror = (e) => reject(e.target.error);
+  }));
+}
+
+/** 批量写入历史（主键重复跳过） */
+function putManyHistory(records){
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_HISTORY, 'readwrite');
+    const store = tx.objectStore(STORE_HISTORY);
+    let added = 0;
+    records.forEach(rec => {
+      const checkReq = store.get(rec.nbr);
+      checkReq.onsuccess = () => {
+        if (checkReq.result === undefined){
+          store.put({
+            nbr:         String(rec.nbr),
+            date:        String(rec.date || ''),
+            time:        String(rec.time || ''),
+            number:      String(rec.number || ''),
+            num:         parseInt(rec.num, 10) || 0,
+            combination: String(rec.combination || '')
+          });
+          added++;
+        }
+      };
+    });
+    tx.oncomplete = () => resolve(added);
+    tx.onerror = (e) => reject(e.target.error);
+  }));
+}
+
+/** 记录总数 */
+function countHistory(){
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_HISTORY, 'readonly');
+    const req = tx.objectStore(STORE_HISTORY).count();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = (e) => reject(e.target.error);
+  }));
+}
+
+/** 裁剪：超过 maxCount 时删除最旧 */
+function trimHistory(maxCount){
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_HISTORY, 'readwrite');
+    const store = tx.objectStore(STORE_HISTORY);
+    const countReq = store.count();
+    countReq.onsuccess = () => {
+      const total = countReq.result;
+      if (total <= maxCount){ resolve(0); return; }
+      const excess = total - maxCount;
+      let deleted = 0;
+      const cursorReq = store.openCursor();
+      cursorReq.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (!cursor || deleted >= excess){ resolve(deleted); return; }
+        cursor.delete();
+        deleted++;
+        cursor.continue();
+      };
+      cursorReq.onerror = (e) => reject(e.target.error);
+    };
+    countReq.onerror = (e) => reject(e.target.error);
+  }));
+}
+
+/** 读取全部预测快照（升序） */
+function getAllPredictions(){
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PREDICTIONS, 'readonly');
+    const req = tx.objectStore(STORE_PREDICTIONS).getAll();
+    req.onsuccess = () => {
+      const arr = req.result || [];
+      arr.sort((a, b) => Number(a.nbr) - Number(b.nbr));
+      resolve(arr);
+    };
+    req.onerror = (e) => reject(e.target.error);
+  }));
+}
+
+/**
+ * 批量 upsert 预测快照：
+ *   - 若不存在 → 完整写入
+ *   - 若已存在 → 只更新 actualCombination / hitA / hitB
+ *     （绝不修改 kill1 / kill2_pair / baseScores / baseWeights）
+ */
+function bulkUpsertPredictions(snapshots){
+  if (!snapshots || snapshots.length === 0) return Promise.resolve(0);
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PREDICTIONS, 'readwrite');
+    const store = tx.objectStore(STORE_PREDICTIONS);
+    let written = 0;
+    for (const snap of snapshots){
+      const getReq = store.get(snap.nbr);
+      getReq.onsuccess = () => {
+        const ex = getReq.result;
+        if (!ex){
+          store.put(snap);
+          written++;
+        } else {
+          // 只回写 actual/hit，保留原 kill1 / kill2_pair / baseScores
+          let changed = false;
+          if (ex.actualCombination !== snap.actualCombination){
+            ex.actualCombination = snap.actualCombination;
+            changed = true;
+          }
+          if (ex.hitA !== snap.hitA){
+            ex.hitA = snap.hitA;
+            changed = true;
+          }
+          if (ex.hitB !== snap.hitB){
+            ex.hitB = snap.hitB;
+            changed = true;
+          }
+          if (changed){
+            store.put(ex);
+            written++;
+          }
+        }
+      };
+    }
+    tx.oncomplete = () => resolve(written);
+    tx.onerror = (e) => reject(e.target.error);
+  }));
+}
+
+/** 清空全部 */
+function clearAll(){
+  return openDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction([STORE_HISTORY, STORE_PREDICTIONS, STORE_META], 'readwrite');
+    tx.objectStore(STORE_HISTORY).clear();
+    tx.objectStore(STORE_PREDICTIONS).clear();
+    tx.objectStore(STORE_META).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = (e) => reject(e.target.error);
+  }));
+}
+
+/* ============================ C. 特征预计算（支持任意 cutoff） ============================ */
+
+/**
+ * 预计算全部历史索引下的辅助数组
+ * 索引含义：prediction at cutoff t 只能使用 [0, t-1] 的数据
+ */
+function precomputeAll(records){
+  const n = records.length;
+  const groups = new Array(n);
+  const sums = new Array(n);
+  for (let i = 0; i < n; i++){
+    groups[i] = GROUP_IDX[records[i].combination];
+    if (groups[i] === undefined) groups[i] = 0;
+    sums[i] = records[i].num;
+  }
+
+  /* 前缀和：prefix[g][i] = records[0..i-1] 中组合 g 的计数 */
+  const prefix = [];
+  for (let g = 0; g < 4; g++){
+    const arr = new Int32Array(n + 1);
+    for (let i = 0; i < n; i++) arr[i + 1] = arr[i] + (groups[i] === g ? 1 : 0);
+    prefix.push(arr);
+  }
+
+  /* 遗漏值：missArr[cutoff*4 + g] = 用 [0, cutoff-1] 计算组合 g 的遗漏 */
+  const missArr = new Int16Array((n + 1) * 4);
+  const lastSeen = [-1, -1, -1, -1];
+  for (let cutoff = 0; cutoff <= n; cutoff++){
+    for (let g = 0; g < 4; g++){
+      missArr[cutoff * 4 + g] = lastSeen[g] >= 0 ? (cutoff - 1 - lastSeen[g]) : cutoff;
+    }
+    if (cutoff < n) lastSeen[groups[cutoff]] = cutoff;
+  }
+
+  /* 连庄强度：streakArr[cutoff*4 + g] = 用 [cutoff-3, cutoff-1] 计算的连庄得分 */
+  const streakArr = new Float32Array((n + 1) * 4);
+  for (let cutoff = 3; cutoff <= n; cutoff++){
+    const g1 = groups[cutoff - 3], g2 = groups[cutoff - 2], g3 = groups[cutoff - 1];
+    const b1 = g1 >= 2 ? 1 : 0, b2 = g2 >= 2 ? 1 : 0, b3 = g3 >= 2 ? 1 : 0;
+    const o1 = (g1 === 0 || g1 === 2) ? 1 : 0;
+    const o2 = (g2 === 0 || g2 === 2) ? 1 : 0;
+    const o3 = (g3 === 0 || g3 === 2) ? 1 : 0;
+    const bigStreak = (b1 === b2 && b2 === b3) ? b1 : -1;
+    const oddStreak = (o1 === o2 && o2 === o3) ? o1 : -1;
+    for (let g = 0; g < 4; g++){
+      const gb = g >= 2 ? 1 : 0;
+      const go = (g === 0 || g === 2) ? 1 : 0;
+      let s = 0;
+      if (bigStreak >= 0 && gb === bigStreak) s++;
+      if (oddStreak >= 0 && go === oddStreak) s++;
+      streakArr[cutoff * 4 + g] = s;
+    }
+  }
+
+  /* 转移矩阵：transAt[cutoff*16 + prev*4 + curr] = [0, cutoff-2] 范围内的转移计数 */
+  const transAt = new Int32Array((n + 1) * 16);
+  const transCount = new Int32Array(16);
+  for (let cutoff = 0; cutoff <= n; cutoff++){
+    transAt.set(transCount, cutoff * 16);
+    if (cutoff >= 1 && cutoff < n){
+      transCount[groups[cutoff - 1] * 4 + groups[cutoff]]++;
+    }
+  }
+
+  return { n, groups, sums, prefix, missArr, streakArr, transAt };
+}
+
+/**
+ * 计算特征矩阵 F[4][6]（target index = cutoff）
+ * 只使用 records[0 .. cutoff-1]，绝不读取 records[cutoff] 及之后
+ *
+ * @param {Object} pre  precomputeAll 返回的预计算数据
+ * @param {number} cutoff  目标索引（预测 records[cutoff]）
+ * @param {number} N  频率窗口
+ * @param {number} k  遗漏惩罚系数
+ */
+function computeFeatures(pre, cutoff, N, k){
+  const { groups, sums, prefix, missArr, streakArr, transAt } = pre;
+  const F = [
+    [0,0,0,0,0,0], [0,0,0,0,0,0], [0,0,0,0,0,0], [0,0,0,0,0,0]
+  ];
+
+  /* f1：近 N 期频率偏离 */
+  const wN = Math.min(N, cutoff);
+  const sN = cutoff - wN;
+  const invN = wN > 0 ? 1 / wN : 0;
+  for (let g = 0; g < 4; g++){
+    F[g][0] = (prefix[g][cutoff] - prefix[g][sN]) * invN - 0.25;
+  }
+
+  /* f2：近 20 期频率偏离 */
+  const w20 = Math.min(20, cutoff);
+  const s20 = cutoff - w20;
+  const inv20 = w20 > 0 ? 1 / w20 : 0;
+  for (let g = 0; g < 4; g++){
+    F[g][1] = (prefix[g][cutoff] - prefix[g][s20]) * inv20 - 0.25;
+  }
+
+  /* f3：遗漏 Sigmoid */
+  for (let g = 0; g < 4; g++){
+    const m = missArr[cutoff * 4 + g];
+    F[g][2] = 1 / (1 + Math.exp(-k * (m - 5)));
+  }
+
+  /* f4：连庄强度 */
+  for (let g = 0; g < 4; g++){
+    F[g][3] = streakArr[cutoff * 4 + g];
+  }
+
+  /* f5：邻期转移概率（拉普拉斯平滑） */
+  if (cutoff > 0){
+    const prev = groups[cutoff - 1];
+    const base = cutoff * 16 + prev * 4;
+    let rowSum = 0;
+    for (let g = 0; g < 4; g++) rowSum += transAt[base + g];
+    const SMOOTH = 5;
+    const invDen = 1 / (rowSum + SMOOTH);
+    for (let g = 0; g < 4; g++){
+      F[g][4] = (transAt[base + g] + SMOOTH * THEORY_PROB[g]) * invDen;
+    }
+  } else {
+    for (let g = 0; g < 4; g++) F[g][4] = THEORY_PROB[g];
+  }
+
+  /* f6：和值区间热度（近 10 期） */
+  const hStart = Math.max(0, cutoff - 10);
+  const hLen = cutoff - hStart;
+  const invH = hLen > 0 ? 1 / hLen : 0;
+  const binCnt = [0, 0, 0, 0, 0, 0, 0];
+  for (let j = hStart; j < cutoff; j++){
+    const sv = sums[j];
+    for (let b = 0; b < 7; b++){
+      if (sv >= SUM_BINS[b][0] && sv <= SUM_BINS[b][1]){ binCnt[b]++; break; }
+    }
+  }
+  for (let g = 0; g < 4; g++){
+    let num = 0, den = 0;
+    for (let b = 0; b < 7; b++){
+      num += BIN_COVER[g][b] * (binCnt[b] * invH);
+      den += BIN_COVER[g][b];
+    }
+    F[g][5] = den > 0 ? num / den : 0;
+  }
+
+  return F;
+}
+
+/* ============================ D. 基学习器与集成 ============================ */
+
+/** 初始化 30 个基学习器（确定性随机） */
+function initLearners(seed){
+  const N_OPTS   = [5, 10, 15, 20, 30];
+  const ETA_OPTS = [0.05, 0.1, 0.2];
+  const K_OPTS   = [0.3, 0.5, 0.8];
+  const rand = makeRNG(seed);
+  const learners = [];
+  for (let i = 0; i < N_LEARNERS; i++){
+    const N   = N_OPTS[Math.floor(rand() * N_OPTS.length)];
+    const eta = ETA_OPTS[Math.floor(rand() * ETA_OPTS.length)];
+    const k   = K_OPTS[Math.floor(rand() * K_OPTS.length)];
+    let mask = 0;
+    while (mask === 0) mask = Math.floor(rand() * 64);
+    learners.push({
+      id: i, N, eta, k, mask,
+      W: [[1,1,1,1,1,1],[1,1,1,1,1,1],[1,1,1,1,1,1],[1,1,1,1,1,1]],
+      hitsA: [],   // 最近 30 期杀 1 命中（0/1）
+      hitsB: []    // 最近 30 期杀 2 命中（0/1）
+    });
+  }
+  return learners;
+}
+
+/** 计算某学习器的 4 组合得分 */
+function learnerScores(W, F, mask){
+  const S = [0, 0, 0, 0];
+  for (let g = 0; g < 4; g++){
+    let s = 0;
+    for (let f = 0; f < 6; f++){
+      if (mask & (1 << f)) s += W[g][f] * F[g][f];
+    }
+    S[g] = s;
+  }
+  return S;
+}
+
+/** 学习器权重：最近 30 期命中率^3；样本不足时等权 1.0 */
+function learnerWeightA(L){
+  if (L.hitsA.length < 5) return 1.0;
+  let s = 0;
+  for (const h of L.hitsA) s += h;
+  const ha = s / L.hitsA.length;
+  return Math.pow(ha, 3) + 0.01;
+}
+function learnerWeightB(L){
+  if (L.hitsB.length < 5) return 1.0;
+  let s = 0;
+  for (const h of L.hitsB) s += h;
+  const hb = s / L.hitsB.length;
+  return Math.pow(hb, 3) + 0.01;
+}
+
+/** 单组得分 → 双杀对得分（求和推导） */
+function pairsFromScores(S){
+  const arr = new Array(6);
+  for (let p = 0; p < 6; p++){
+    const [a, b] = PAIRS[p];
+    arr[p] = S[a] + S[b];
+  }
+  return arr;
+}
+
+/** 感知机权重更新（仅使用某一期实际结果，更新后供未来预测使用） */
+function updateLearnerWeights(W, F, kill1, eta, mask){
+  // 杀错了 → 惩罚组合 kill1 上"误导"的特征
+  for (let f = 0; f < 6; f++){
+    if (!(mask & (1 << f))) continue;
+    const killVal = F[kill1][f];
+    let sumO = 0;
+    for (let g = 0; g < 4; g++) if (g !== kill1) sumO += F[g][f];
+    if (killVal > sumO / 3){
+      W[kill1][f] -= eta;
+      if (W[kill1][f] < 0.1) W[kill1][f] = 0.1;
+    }
+  }
+}
+
+/* ============================ E. 主回测（walk-forward） ============================ */
+
+/**
+ * 全量 walk-forward 回测
+ *   对 t = MIN_T .. n，用 [0, t-1] 预测 t，写入快照
+ *   预测后立即用 t 期实际结果更新学习器状态（只影响之后的预测）
+ *
+ * @returns {{snapshots: Array, learners: Array, pre: Object}}
+ */
+function runWalkForward(records, mode){
+  const n = records.length;
+  const pre = precomputeAll(records);
+  const learners = initLearners(0xA13C);
+  const snapshots = [];
+
+  if (n < MIN_T){
+    // 冷启动：全局频率最低
+    const cnt = [0,0,0,0];
+    for (const r of records) cnt[GROUP_IDX[r.combination]]++;
+    const order = [0,1,2,3].sort((a,b) => cnt[a] - cnt[b]);
+    const kill1 = order[0];
+    const kill2pair = [order[0], order[1]];
+    const lastNbr = Number(records[n - 1] ? records[n - 1].nbr : 0);
+    const nextNbr = isNaN(lastNbr) ? '?' : String(lastNbr + 1);
+    return {
+      snapshots: [],
+      learners,
+      pre,
+      coldStart: true,
+      nextSnapshot: {
+        nbr: nextNbr,
+        predictTime: Date.now(),
+        windowDataHash: windowHash(records, n),
+        baseScores: [], baseWeights: [],
+        kill1,
+        kill2_pair: [kill2pair[0], kill2pair[1]],
+        kill2_two_names: [GROUP_NAMES[kill2pair[0]], GROUP_NAMES[kill2pair[1]]],
+        confA: 0, confB: 0,
+        modelVersion: MODEL_VERSION,
+        actualCombination: null, hitA: null, hitB: null,
+        mode
+      }
+    };
+  }
+
+  for (let t = MIN_T; t <= n; t++){
+    const isNext = (t === n);
+
+    // 按 (N, k) 缓存特征
+    const featCache = new Map();
+    const learnerScoresAll = [];
+    const learnerFeats = [];
+
+    for (let i = 0; i < learners.length; i++){
+      const L = learners[i];
+      const key = L.N + '_' + L.k;
+      let F = featCache.get(key);
+      if (!F){
+        F = computeFeatures(pre, t, L.N, L.k);
+        featCache.set(key, F);
+      }
+      const S = learnerScores(L.W, F, L.mask);
+      learnerScoresAll.push(S);
+      learnerFeats.push(F);
+    }
+
+    /* 集成聚合 */
+    const SA = [0, 0, 0, 0];
+    const pairScoresB = [0, 0, 0, 0, 0, 0];
+    for (let i = 0; i < learners.length; i++){
+      const wA = learnerWeightA(learners[i]);
+      const wB = learnerWeightB(learners[i]);
+      const S = learnerScoresAll[i];
+      for (let g = 0; g < 4; g++) SA[g] += wA * S[g];
+      const ps = pairsFromScores(S);
+      for (let p = 0; p < 6; p++) pairScoresB[p] += wB * ps[p];
+    }
+
+    /* 杀 1：S 最大的组合 */
+    let kill1 = 0;
+    for (let g = 1; g < 4; g++) if (SA[g] > SA[kill1]) kill1 = g;
+
+    /* 杀 2：根据 mode */
+    let kill2pair;
+    if (mode === 'pair'){
+      let bp = 0;
+      for (let p = 1; p < 6; p++) if (pairScoresB[p] > pairScoresB[bp]) bp = p;
+      kill2pair = PAIRS[bp].slice();
+    } else {
+      const order = [0,1,2,3].sort((a,b) => SA[b] - SA[a]);
+      kill2pair = [order[0], order[1]];
+    }
+
+    /* 实际结果 */
+    const actual = isNext ? null : pre.groups[t];
+
+    /* 命中 */
+    let hitA = null, hitB = null;
+    if (!isNext){
+      hitA = (actual !== kill1) ? 1 : 0;
+      hitB = (actual !== kill2pair[0] && actual !== kill2pair[1]) ? 1 : 0;
+    }
+
+    /* 快照 */
+    const targetNbr = isNext
+      ? (() => { const lastN = Number(records[n-1].nbr); return isNaN(lastN) ? '?' : String(lastN + 1); })()
+      : String(records[t].nbr);
+
+    const snapshot = {
+      nbr: targetNbr,
+      predictTime: Date.now(),
+      windowDataHash: windowHash(records, t),
+      baseScores: learnerScoresAll.map((S, i) => ({
+        baseId: i,
+        score: [S[0], S[1], S[2], S[3]]
+      })),
+      baseWeights: learners.map((L, i) => ({
+        baseId: i,
+        wA: learnerWeightA(L),
+        wB: learnerWeightB(L)
+      })),
+      kill1,
+      kill2_pair: [kill2pair[0], kill2pair[1]],
+      kill2_two_names: [GROUP_NAMES[kill2pair[0]], GROUP_NAMES[kill2pair[1]]],
+      confA: computeConf(SA),
+      confB: computeConf(pairScoresB),
+      modelVersion: MODEL_VERSION,
+      actualCombination: isNext ? null : actual,
+      hitA, hitB,
+      mode
+    };
+    snapshots.push(snapshot);
+
+    /* 只有 t < n 才更新学习器（下一期无实际结果） */
+    if (!isNext){
+      for (let i = 0; i < learners.length; i++){
+        const L = learners[i];
+        const S = learnerScoresAll[i];
+        const F = learnerFeats[i];
+
+        // 该学习器自己的 kill1
+        let lk1 = 0;
+        for (let g = 1; g < 4; g++) if (S[g] > S[lk1]) lk1 = g;
+
+        // 该学习器自己的 kill2pair
+        let lk2pair;
+        if (mode === 'pair'){
+          const ps = pairsFromScores(S);
+          let bp = 0;
+          for (let p = 1; p < 6; p++) if (ps[p] > ps[bp]) bp = p;
+          lk2pair = PAIRS[bp];
+        } else {
+          const order = [0,1,2,3].sort((a,b) => S[b] - S[a]);
+          lk2pair = [order[0], order[1]];
+        }
+
+        // 该学习器命中
+        const hitA_L = (actual !== lk1) ? 1 : 0;
+        const hitB_L = (actual !== lk2pair[0] && actual !== lk2pair[1]) ? 1 : 0;
+
+        L.hitsA.push(hitA_L);
+        if (L.hitsA.length > EMA_WINDOW) L.hitsA.shift();
+        L.hitsB.push(hitB_L);
+        if (L.hitsB.length > EMA_WINDOW) L.hitsB.shift();
+
+        // 感知机更新（仅当杀 1 命中失败）
+        if (hitA_L === 0){
+          updateLearnerWeights(L.W, F, lk1, L.eta, L.mask);
+        }
+      }
+    }
+  }
+
+  return { snapshots, learners, pre, coldStart: false };
+}
+
+/* ============================ F. 断言式自检 ============================ */
+
+/**
+ * 单元自检：确保 computeFeatures 不读取 cutoff 及之后的数据
+ *   - 复制 records，截断到 cutoff，特征应当一致
+ */
+function assertNoFutureLeak(records){
+  if (records.length < 30) return true;
+  const cutoff = Math.floor(records.length * 0.7);
+  const truncated = records.slice(0, cutoff);
+  const pre1 = precomputeAll(records);
+  const pre2 = precomputeAll(truncated);
+  const F1 = computeFeatures(pre1, cutoff, 10, 0.5);
+  const F2 = computeFeatures(pre2, cutoff, 10, 0.5);
+  for (let g = 0; g < 4; g++){
+    for (let f = 0; f < 6; f++){
+      if (Math.abs(F1[g][f] - F2[g][f]) > 1e-9){
+        console.error(`[Assert] 特征泄漏检测失败 g=${g} f=${f}`, F1[g][f], F2[g][f]);
+        return false;
+      }
+    }
+  }
+  console.log('[Assert] 特征无未来泄漏 ✓');
+  return true;
+}
+
+/* ============================ G. UI 渲染模块 ============================ */
+
+function updateTopbar(memCount){
+  $('memCount').textContent = memCount;
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  $('clock').textContent =
+    `${pad(now.getMonth()+1)}-${pad(now.getDate())} ` +
+    `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+}
+
+function showErr(msg){
+  $('errMsg').textContent = msg;
+  $('errTip').classList.remove('hidden');
+  $('statusDot').classList.add('err');
+}
+function hideErr(){
+  $('errTip').classList.add('hidden');
+  $('statusDot').classList.remove('err');
+}
+
+function renderLatest(records){
+  const body = $('latestBody');
+  if (!records || records.length === 0){
+    body.innerHTML = '<tr><td colspan="5" style="color:#94a3b8;padding:14px;">暂无数据</td></tr>';
+    return;
+  }
+  const rows = records.slice(-10).reverse();
+  body.innerHTML = rows.map(r => {
+    const g = GROUP_IDX[r.combination];
+    const gTag = (g !== undefined)
+      ? `<span class="tag g${g}">${esc(r.combination)}</span>` : esc(r.combination);
+    return `<tr>
+      <td class="mono">${esc(r.nbr)}</td>
+      <td class="mono">${esc(r.number)}</td>
+      <td class="num">${r.num}</td>
+      <td>${gTag}</td>
+      <td style="font-size:11px;color:#64748b;">${esc(r.date||'')} ${esc(r.time||'')}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderPredict(nextSnapshot){
+  if (!nextSnapshot){
+    $('predictPeriod').textContent = '目标期号：—';
+    $('planAKill').textContent = '—';
+    $('planABuy').innerHTML = '<span>—</span>';
+    $('planBKill').textContent = '—';
+    $('planBBuy').innerHTML = '<span>—</span>';
+    $('confValA').textContent = '—'; $('confBarA').style.width = '0%';
+    $('confValB').textContent = '—'; $('confBarB').style.width = '0%';
+    return;
+  }
+
+  $('predictPeriod').textContent = `目标期号：第 ${nextSnapshot.nbr} 期`;
+
+  const aKill = nextSnapshot.kill1;
+  $('planAKill').textContent = GROUP_NAMES[aKill];
+  $('planABuy').innerHTML = [0,1,2,3].filter(g => g !== aKill)
+    .map(g => `<span>${GROUP_NAMES[g]}</span>`).join('');
+
+  const bKill = nextSnapshot.kill2_pair;
+  $('planBKill').textContent = `${GROUP_NAMES[bKill[0]]} + ${GROUP_NAMES[bKill[1]]}`;
+  $('planBBuy').innerHTML = [0,1,2,3].filter(g => bKill.indexOf(g) < 0)
+    .map(g => `<span>${GROUP_NAMES[g]}</span>`).join('');
+
+  const ca = Math.max(0, Math.min(1, nextSnapshot.confA));
+  const cb = Math.max(0, Math.min(1, nextSnapshot.confB));
+  $('confValA').textContent = (ca * 100).toFixed(1) + '%';
+  $('confBarA').style.width = (ca * 100) + '%';
+  $('confValB').textContent = (cb * 100).toFixed(1) + '%';
+  $('confBarB').style.width = (cb * 100) + '%';
+}
+
+/**
+ * 明细表 —— 严格按预测快照 nbr 匹配（nbr 就是预测目标期号）
+ */
+function renderDetail(predictions){
+  const body = $('detailBody');
+  if (!predictions || predictions.length === 0){
+    body.innerHTML = '<tr><td colspan="6" style="color:#94a3b8;padding:14px;">暂无数据</td></tr>';
+    return;
+  }
+
+  // 最近 50 条（按 nbr 降序）
+  const rows = predictions.slice(-50).reverse();
+
+  body.innerHTML = rows.map(p => {
+    const nbr = String(p.nbr);
+
+    // 实际组合
+    let actualHtml;
+    if (p.actualCombination === null || p.actualCombination === undefined){
+      actualHtml = '<span class="result-pending">等待开奖</span>';
+    } else {
+      actualHtml = `<span class="tag g${p.actualCombination}">${GROUP_NAMES[p.actualCombination]}</span>`;
+    }
+
+    // 杀 1
+    const killAHtml = (p.kill1 !== null && p.kill1 !== undefined)
+      ? `<span class="tag g${p.kill1}">${GROUP_NAMES[p.kill1]}</span>` : '—';
+
+    // A 命中
+    let hitAHtml;
+    if (p.hitA === 1) hitAHtml = '<span class="result-ok">✓</span>';
+    else if (p.hitA === 0) hitAHtml = '<span class="result-fail">✗</span>';
+    else hitAHtml = '<span class="result-pending">—</span>';
+
+    // 双杀对
+    let killBHtml = '—';
+    if (p.kill2_pair && p.kill2_pair.length === 2){
+      killBHtml = p.kill2_pair.map(g =>
+        `<span class="tag g${g}">${GROUP_NAMES[g]}</span>`).join('');
+    }
+
+    // B 命中
+    let hitBHtml;
+    if (p.hitB === 1) hitBHtml = '<span class="result-ok">✓</span>';
+    else if (p.hitB === 0) hitBHtml = '<span class="result-fail">✗</span>';
+    else hitBHtml = '<span class="result-pending">—</span>';
+
+    // 行背景
+    let rowCls = 'clickable';
+    if (p.hitA === 0) rowCls += ' miss';
+    else if (p.hitB === 0) rowCls += ' missB';
+    else if (p.actualCombination === null) rowCls += ' pending';
+
+    return `<tr class="${rowCls}" data-nbr="${esc(nbr)}">
+      <td class="mono">${esc(nbr)}</td>
+      <td>${actualHtml}</td>
+      <td>${killAHtml}</td>
+      <td>${hitAHtml}</td>
+      <td>${killBHtml}</td>
+      <td>${hitBHtml}</td>
+    </tr>`;
+  }).join('');
+
+  // 点击查看快照
+  body.querySelectorAll('tr.clickable').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const nbr = tr.dataset.nbr;
+      const pred = predictions.find(p => String(p.nbr) === nbr);
+      if (pred) showSnapshot(pred);
+    });
+  });
+}
+
+/** 显示快照详情（baseScores / baseWeights） */
+function showSnapshot(pred){
+  const content = $('modalContent');
+  let html = `<h3>预测快照 · 目标期号 ${esc(pred.nbr)}</h3>`;
+  html += `<div style="font-size:12px;color:#64748b;line-height:1.8;margin-bottom:10px;">
+    <b>预测时间：</b>${new Date(pred.predictTime).toLocaleString()}<br>
+    <b>模型版本：</b>${esc(pred.modelVersion || '-')} · <b>双组模式：</b>${esc(pred.mode || '-')}<br>
+    <b>数据指纹：</b>${esc(pred.windowDataHash || '-')}<br>
+    <b>杀1：</b><span class="tag g${pred.kill1}">${GROUP_NAMES[pred.kill1]}</span>
+    · <b>双杀对：</b>${pred.kill2_pair.map(g => `<span class="tag g${g}">${GROUP_NAMES[g]}</span>`).join('')}<br>
+    <b>命中：</b>A=${pred.hitA === null ? '待开奖' : (pred.hitA ? '✓' : '✗')}
+    · B=${pred.hitB === null ? '待开奖' : (pred.hitB ? '✓' : '✗')}<br>
+    <b>实际：</b>${pred.actualCombination === null || pred.actualCombination === undefined
+      ? '<span style="color:#d97706;">等待开奖</span>'
+      : `<span class="tag g${pred.actualCombination}">${GROUP_NAMES[pred.actualCombination]}</span>`}
+  </div>`;
+
+  html += `<h4>基学习器得分（越高越该杀）</h4>`;
+  html += `<div style="overflow:auto;max-height:280px;"><table>
+    <thead><tr><th>#</th><th>小单</th><th>小双</th><th>大单</th><th>大双</th><th>wA</th><th>wB</th></tr></thead><tbody>`;
+  for (const bs of pred.baseScores){
+    const bw = pred.baseWeights.find(x => x.baseId === bs.baseId) || { wA: 0, wB: 0 };
+    html += `<tr>
+      <td>${bs.baseId + 1}</td>
+      <td>${bs.score[0].toFixed(4)}</td>
+      <td>${bs.score[1].toFixed(4)}</td>
+      <td>${bs.score[2].toFixed(4)}</td>
+      <td>${bs.score[3].toFixed(4)}</td>
+      <td style="color:#dc2626;">${bw.wA.toFixed(4)}</td>
+      <td style="color:#2563eb;">${bw.wB.toFixed(4)}</td>
+    </tr>`;
+  }
+  html += `</tbody></table></div>`;
+
+  content.innerHTML = html;
+  $('modalMask').classList.add('show');
+}
+
+$('modalClose').addEventListener('click', () => {
+  $('modalMask').classList.remove('show');
+});
+$('modalMask').addEventListener('click', (e) => {
+  if (e.target === $('modalMask')) $('modalMask').classList.remove('show');
+});
+
+/** 图表：双曲线 */
+function drawDualChart(canvas, hitsA, hitsB){
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = Math.max(360, canvas.parentElement.clientWidth - 14);
+  const cssH = 260;
+
+  canvas.width  = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  canvas.style.width  = '100%';
+  canvas.style.height = cssH + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  const pad = { l: 46, r: 16, t: 26, b: 34 };
+  const pw = cssW - pad.l - pad.r;
+  const ph = cssH - pad.t - pad.b;
+
+  const ROLL = 30;
+  if (!hitsA || hitsA.length < ROLL || !hitsB || hitsB.length < ROLL){
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`需要至少 ${ROLL} 期数据才能形成窗口`, cssW / 2, cssH / 2);
+    return;
+  }
+
+  function rolling(hits){
+    const win = [];
+    let s = 0;
+    for (let j = 0; j < ROLL; j++) s += hits[j];
+    win.push(s / ROLL);
+    for (let k = 1; k + ROLL <= hits.length; k++){
+      s = s - hits[k - 1] + hits[k + ROLL - 1];
+      win.push(s / ROLL);
+    }
+    return win;
+  }
+  const winA = rolling(hitsA);
+  const winB = rolling(hitsB);
+
+  let yLo = 1, yHi = 0;
+  winA.forEach(v => { if (v < yLo) yLo = v; if (v > yHi) yHi = v; });
+  winB.forEach(v => { if (v < yLo) yLo = v; if (v > yHi) yHi = v; });
+  yLo = Math.min(yLo, 0.85);
+  yHi = Math.max(yHi, 0.85);
+  yLo = Math.max(0, Math.floor((yLo - 0.08) * 20) / 20);
+  yHi = Math.min(1, Math.ceil((yHi + 0.05) * 20) / 20);
+  if (yHi - yLo < 0.25) yHi = Math.min(1, yLo + 0.25);
+
+  const yToPx = v => pad.t + (yHi - v) / (yHi - yLo) * ph;
+  const xToPx = i => pad.l + (winA.length === 1 ? pw / 2 : i / (winA.length - 1) * pw);
+
+  const TICKS = 5;
+  ctx.font = '10px sans-serif';
+  ctx.textBaseline = 'middle';
+  for (let t = 0; t <= TICKS; t++){
+    const v = yLo + (yHi - yLo) * t / TICKS;
+    const y = yToPx(v);
+    ctx.strokeStyle = '#eef2f7';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + pw, y);
+    ctx.stroke();
+    ctx.fillStyle = '#94a3b8';
+    ctx.textAlign = 'right';
+    ctx.fillText((v*100).toFixed(0) + '%', pad.l - 6, y);
+  }
+
+  const y85 = yToPx(0.85);
+  ctx.save();
+  ctx.setLineDash([6, 4]);
+  ctx.strokeStyle = '#dc2626';
+  ctx.lineWidth = 1.3;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, y85); ctx.lineTo(pad.l + pw, y85);
+  ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = '#dc2626';
+  ctx.font = 'bold 10px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('85%', pad.l + 4, y85 - 2);
+
+  // A 红
+  ctx.beginPath();
+  winA.forEach((v, i) => {
+    const x = xToPx(i), y = yToPx(v);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#dc2626';
+  ctx.lineWidth = 2.4;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // B 蓝
+  ctx.beginPath();
+  winB.forEach((v, i) => {
+    const x = xToPx(i), y = yToPx(v);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#2563eb';
+  ctx.lineWidth = 1.6;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // 低于 85% 标点
+  winA.forEach((v, i) => {
+    if (v < 0.85){
+      ctx.beginPath();
+      ctx.arc(xToPx(i), yToPx(v), 2.4, 0, Math.PI * 2);
+      ctx.fillStyle = '#dc2626';
+      ctx.fill();
+    }
+  });
+  winB.forEach((v, i) => {
+    if (v < 0.85){
+      ctx.beginPath();
+      ctx.arc(xToPx(i), yToPx(v), 1.8, 0, Math.PI * 2);
+      ctx.fillStyle = '#2563eb';
+      ctx.fill();
+    }
+  });
+
+  // 图例
+  const lx = pad.l + pw - 148;
+  const ly = pad.t + 2;
+  ctx.fillStyle = 'rgba(255,255,255,.92)';
+  ctx.fillRect(lx - 4, ly - 2, 144, 32);
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(lx - 4, ly - 2, 144, 32);
+  ctx.font = 'bold 10px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+
+  ctx.beginPath();
+  ctx.moveTo(lx, ly + 6); ctx.lineTo(lx + 18, ly + 6);
+  ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 2.4; ctx.stroke();
+  ctx.fillStyle = '#dc2626';
+  ctx.fillText('方案A 买三杀一', lx + 22, ly + 6);
+
+  ctx.beginPath();
+  ctx.moveTo(lx, ly + 22); ctx.lineTo(lx + 18, ly + 22);
+  ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 1.6; ctx.stroke();
+  ctx.fillStyle = '#2563eb';
+  ctx.fillText('方案B 买二杀二', lx + 22, ly + 22);
+
+  // 横轴
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  const step = Math.max(1, Math.ceil(winA.length / 10));
+  for (let i = 0; i < winA.length; i += step){
+    ctx.fillText(String(i + 1), xToPx(i), pad.t + ph + 6);
+  }
+  ctx.fillStyle = '#cbd5e1';
+  ctx.fillText('窗口序号', pad.l + pw / 2, pad.t + ph + 20);
+}
+
+function renderFreq(records){
+  const total = records.length || 1;
+  const cnt = [0,0,0,0];
+  records.forEach(r => {
+    const g = GROUP_IDX[r.combination];
+    if (g !== undefined) cnt[g]++;
+  });
+  const maxCnt = Math.max(...cnt) || 1;
+
+  $('freqList').innerHTML = GROUP_NAMES.map((name, g) => {
+    const p = cnt[g] / total;
+    const barW = (cnt[g] / maxCnt) * 100;
+    return `<div class="freq-item">
+      <span class="name" style="color:${GROUP_COLORS[g]}">${name}</span>
+      <span class="bar"><i style="width:${barW}%;background:${GROUP_COLORS[g]}"></i></span>
+      <span class="pct">${cnt[g]} 期 · ${pct(p,1)}</span>
+    </div>`;
+  }).join('') + `
+    <div style="font-size:11px;color:#94a3b8;margin-top:2px;padding-left:60px;">
+      理论：小单 26.9% · 小双 23.1% · 大单 23.1% · 大双 26.9%
+    </div>`;
+}
+
+/* ============================ H. 数据同步与轮询 ============================ */
+
+const API_URL = 'https://pc28.help/api/kj.json?nbr=80';
+let _pollTimer = null;
+let _refreshing = false;
+
+/** 当前双组模式：'pair'（配对联合）| 'top2'（单组前二） */
+let currentMode = 'pair';
+
+function fetchFromAPI(){
+  return fetch(API_URL, { cache: 'no-store' })
+    .then(res => {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(json => {
+      if (!json || !Array.isArray(json.data)){
+        throw new Error('接口返回格式异常');
+      }
+      // data 按期号降序 → reverse 成升序
+      const records = json.data.slice().reverse().map(item => ({
+        nbr:         String(item.nbr || ''),
+        date:        String(item.date || ''),
+        time:        String(item.time || ''),
+        number:      String(item.number || ''),
+        num:         parseInt(item.num, 10) || 0,
+        combination: String(item.combination || '')
+      })).filter(r => r.nbr && r.combination);
+      return { records, countdown: json.countdown || null };
+    });
+}
+
+/** 刷新流程：读历史 → walk-forward → upsert 快照 → 渲染 */
+async function refresh(){
+  if (_refreshing) return;
+  _refreshing = true;
+
+  try {
+    const all = await getAllHistory();
+    updateTopbar(all.length);
+
+    if (all.length === 0){
+      $('latestBody').innerHTML =
+        '<tr><td colspan="5" style="color:#94a3b8;padding:14px;">暂无数据</td></tr>';
+      return;
+    }
+
+    // 走一遍 walk-forward（含下一期预测）
+    const { snapshots, coldStart } = runWalkForward(all, currentMode);
+
+    // 读取已有预测快照
+    const existing = await getAllPredictions();
+    const existingMap = new Map();
+    for (const p of existing) existingMap.set(String(p.nbr), p);
+
+    // 构造写入列表：新 + 需要回写 actual/hit 的
+    const toUpsert = [];
+    for (const snap of snapshots){
+      const ex = existingMap.get(String(snap.nbr));
+      if (!ex){
+        toUpsert.push(snap);
+      } else {
+        // 只回写 actual/hit（若无变化则跳过）
+        if (ex.actualCombination !== snap.actualCombination ||
+            ex.hitA !== snap.hitA ||
+            ex.hitB !== snap.hitB){
+          toUpsert.push(snap);
+        }
+      }
+    }
+    if (toUpsert.length > 0){
+      const n = await bulkUpsertPredictions(toUpsert);
+      console.log(`[Snapshots] upsert ${n} 条`);
+    }
+
+    // 从 DB 重新读取全部预测用于渲染（保证显示的永远是存储版）
+    const allPreds = await getAllPredictions();
+    // 找出下一期预测（最大 nbr）
+    let nextSnap = allPreds[allPreds.length - 1];
+    if (!nextSnap && snapshots.length > 0) nextSnap = snapshots[snapshots.length - 1];
+
+    // 渲染
+    renderLatest(all);
+    renderPredict(nextSnap);
+    renderDetail(allPreds);
+    renderFreq(all);
+
+    // 图表用最近 500 期的 hit 序列
+    const hitsA = allPreds.slice(-500).map(p => p.hitA === null ? 0 : p.hitA);
+    const hitsB = allPreds.slice(-500).map(p => p.hitB === null ? 0 : p.hitB);
+    requestAnimationFrame(() => drawDualChart($('chartHit'), hitsA, hitsB));
+
+  } catch (err){
+    console.error('[Refresh] 失败', err);
+  } finally {
+    _refreshing = false;
+  }
+}
+
+async function syncAndPredict(){
+  try {
+    const { records: remote, countdown } = await fetchFromAPI();
+    hideErr();
+
+    const added = await putManyHistory(remote);
+    if (added > 0) console.log('[Sync] 新增 ' + added + ' 期');
+
+    await trimHistory(MAX_RECORDS);
+    if (countdown) $('countdown').textContent = countdown;
+
+    await refresh();
+  } catch (err){
+    console.error('[Sync] 失败', err);
+    showErr('接口异常，使用本地数据');
+    await refresh();
+  }
+}
+
+function startPolling(){
+  if (_pollTimer) clearInterval(_pollTimer);
+  _pollTimer = setInterval(() => { syncAndPredict(); }, POLL_MS);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible'){
+      console.log('[Poll] 页面恢复可见，立即同步');
+      syncAndPredict();
+    }
+  });
+
+  console.log('[Poll] 已启动，间隔 ' + (POLL_MS / 1000) + ' 秒');
+}
+
+/* ============================ I. 模式切换 ============================ */
+
+$('modePair').addEventListener('click', () => {
+  if (currentMode === 'pair') return;
+  currentMode = 'pair';
+  $('modePair').classList.add('active');
+  $('modeTop2').classList.remove('active');
+  console.log('[Mode] 双组模式 = 配对联合');
+  refresh();
+});
+$('modeTop2').addEventListener('click', () => {
+  if (currentMode === 'top2') return;
+  currentMode = 'top2';
+  $('modeTop2').classList.add('active');
+  $('modePair').classList.remove('active');
+  console.log('[Mode] 双组模式 = 单组前二');
+  refresh();
+});
+
+/* ============================ J. 启动流程 ============================ */
+
+async function init(){
+  console.log('%cPC28 实时双轨预测系统 v13.1',
+              'color:#2563eb;font-size:15px;font-weight:700;');
+  console.log('模型版本：' + MODEL_VERSION);
+
+  try {
+    await openDB();
+
+    const cnt = await countHistory();
+    console.log('[Init] 本地历史 ' + cnt + ' 期');
+
+    if (cnt === 0){
+      console.log('[Init] 首次运行，从接口获取数据…');
+      try {
+        const { records, countdown } = await fetchFromAPI();
+        await putManyHistory(records);
+        if (countdown) $('countdown').textContent = countdown;
+        console.log('[Init] 已写入 ' + records.length + ' 期');
+      } catch (err){
+        console.error('[Init] 接口失败', err);
+        showErr('接口异常，使用本地数据');
+      }
+    }
+
+    // 特征无泄漏自检
+    const all = await getAllHistory();
+    if (all.length > 50) assertNoFutureLeak(all);
+
+    await refresh();
+    startPolling();
+
+    setInterval(() => {
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      $('clock').textContent =
+        `${pad(now.getMonth()+1)}-${pad(now.getDate())} ` +
+        `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    }, 1000);
+
+    console.log('[Init] 初始化完成');
+  } catch (err){
+    console.error('[Init] 致命错误', err);
+    showErr('初始化失败：' + err.message);
+  }
+}
+
+/* ---- 清除本地数据 ---- */
+$('clearBtn').addEventListener('click', async () => {
+  if (!confirm('确定要清除本地数据（含历史与快照）并重新开始吗？')) return;
+
+  try {
+    await clearAll();
+    console.log('[Clear] 本地数据已清除');
+
+    try {
+      const { records, countdown } = await fetchFromAPI();
+      await putManyHistory(records);
+      if (countdown) $('countdown').textContent = countdown;
+      console.log('[Clear] 重新写入 ' + records.length + ' 期');
+    } catch (err){
+      console.error('[Clear] 重新获取失败', err);
+      showErr('接口异常，请稍后重试');
+    }
+    await refresh();
+  } catch (err){
+    console.error('[Clear] 失败', err);
+    alert('清除失败：' + err.message);
+  }
+});
+
+/* ---- 窗口尺寸变化重绘 ---- */
+let _resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => { refresh().catch(() => {}); }, 220);
+});
+
+init();
+
+console.log('%cPC28 实时双轨预测系统 v13.1',
+            'color:#2563eb;font-size:13px;font-weight:700;');
+console.log('模型版本：' + MODEL_VERSION);
+console.log('严格时间一致性：predict(t) 只用 [0, t-1] 数据');
+console.log('预测快照冻结：开奖后只回写 actual/hit，不改预测列');
+</script>
+</body>
+</html>
